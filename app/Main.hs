@@ -1,6 +1,8 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
 import System.Directory
+import Network.HTTP.Conduit
+import qualified Data.ByteString.Lazy as L
 
 type HtmlTag = String
 
@@ -12,6 +14,7 @@ main = do
   contents <- readFile "./README.md"
   putStrLn $ convert contents
   createDirectoryIfMissing False "./build"
+  simpleHttp "https://cdn.tailwindcss.com?plugins=typography" >>= L.writeFile "./build/tailwind.js"
   writeFile "./build/index.html" $ convert contents
 
 isPrefix :: String -> String -> Bool
@@ -67,7 +70,7 @@ convertTag (MdString content:xs) = HtmlParagraph content : convertTag xs
 toHtml :: [HtmlStructure] -> String
 toHtml x = wrapHtml $ htmlHead <> htmlBody
   where
-    htmlHead = wrapHead $ wrapAttrTag "script" [("src", "https://cdn.tailwindcss.com?plugins=typography")] ""
+    htmlHead = wrapHead $ wrapAttrTag "script" [("src", "/tailwind.js")] ""
     htmlBody = wrapBody $ foldr (<>) "" (map matchTag x)
 
 matchTag :: HtmlStructure -> String
