@@ -100,7 +100,7 @@ wrapTag :: HtmlTag -> String -> String
 wrapTag tag content = wrapAttrTag tag [] content
 
 wrapHtml :: String -> String
-wrapHtml content = wrapTag "html" content
+wrapHtml content = "<!DOCTYPE html>" <> (wrapTag "html" content)
 
 wrapBody :: String -> String
 wrapBody content = wrapAttrTag "body" [("class", "prose mx-auto p-4")] content
