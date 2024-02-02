@@ -1,13 +1,12 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
-import System.Directory
-import Network.HTTP.Conduit
+import System.Directory (createDirectoryIfMissing)
+import Network.HTTP.Conduit (simpleHttp)
 import qualified Data.ByteString.Lazy as L
 
 type HtmlTag = String
 
-data MarkdownStructure = MdHeader Int | MdCode | MdUl | MdString String
-data HtmlStructure = HtmlHeader Int String | HtmlCode String | HtmlUl [String] | HtmlOl [String] | HtmlParagraph String
+data Structure = Header !Int !String | Code !String !String | Ul ![String] | Ol ![String] | Paragraph !String
 
 main :: IO ()
 main = do
@@ -17,22 +16,27 @@ main = do
   simpleHttp "https://cdn.tailwindcss.com?plugins=typography" >>= L.writeFile "./build/tailwind.js"
   writeFile "./build/index.html" $ convert contents
 
-isPrefix :: String -> String -> Bool
-isPrefix [] _ = True
-isPrefix _ [] = False
-isPrefix (x:xs) (y:ys) = if x == y then isPrefix xs ys else False
+hasPrefix :: String -> String -> Bool
+hasPrefix [] _ = True
+hasPrefix _ [] = False
+hasPrefix (x:xs) (y:ys) = (x == y) && hasPrefix xs ys
 
 stripPrefix :: String -> String -> Maybe String
 stripPrefix [] x = Just x
 stripPrefix _ [] = Nothing
 stripPrefix (x:xs) (y:ys) = if x == y then stripPrefix xs ys else Nothing
 
+stripPrefixForce :: String -> String -> String
+stripPrefixForce [] x = x
+stripPrefixForce _ [] = []
+stripPrefixForce (x:xs) (y:ys) = if x == y then stripPrefixForce xs ys else ys
+
 trimWhitespace :: String -> String
 trimWhitespace = trimPostfix . trimPrefix
   where
     trimPrefix :: String -> String
+    trimPrefix (' ':xs) = trimPrefix xs
     trimPrefix x = x
-    trimPrefix (' ':xs) = xs
 
     trimPostfix :: String -> String
     trimPostfix x = reverse $ trimPrefix $ reverse x
@@ -43,67 +47,58 @@ intToChar x
   | otherwise = '0'
 
 convert :: String -> String
-convert = toHtml . convertTag . parseMd
+convert = toHtml . parseMd
 
-parseMd :: String -> [MarkdownStructure]
-parseMd mdString = foldr (<>) [] (map (parseTag . trimWhitespace) (lines mdString))
+parseMd :: String -> [Structure]
+parseMd mdString = parseTag (map trimWhitespace (lines mdString))
 
-parseTag :: String -> [MarkdownStructure]
-parseTag (stripPrefix "# " -> Just content) =    [MdHeader 1, MdString content]
-parseTag (stripPrefix "## " -> Just content) =   [MdHeader 2, MdString content]
-parseTag (stripPrefix "### " -> Just content) =  [MdHeader 3, MdString content]
-parseTag (stripPrefix "#### " -> Just content) = [MdHeader 4, MdString content]
-parseTag (stripPrefix "- " -> Just content) = [MdUl, MdString content]
-parseTag (stripPrefix "```" -> Just _) = [MdCode]
-parseTag content = [MdString content]
-
-convertTag :: [MarkdownStructure] -> [HtmlStructure]
-convertTag [] = []
-convertTag ((MdHeader i):(MdString content):xs) = HtmlHeader i content : convertTag xs
-convertTag ((MdUl):(MdString content):xs) = HtmlUl [content] : convertTag xs
-convertTag ((MdCode):xs) = HtmlCode content : convertTag rest
+parseTag :: [String] -> [Structure]
+parseTag [] = []
+parseTag ((stripPrefix "######" -> Just content):xs) = Header 6 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "#####" -> Just content):xs) = Header 5 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "####" -> Just content):xs) = Header 4 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "###" -> Just content):xs) = Header 3 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "##" -> Just content):xs) = Header 2 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "#" -> Just content):xs) = Header 1 (trimWhitespace content) : parseTag xs
+parseTag ((stripPrefix "-" -> Just content):xs) = Ul contents : parseTag rest
   where
-    contentData = takeWhile (not . isMdCode) xs
-    content = foldr (\x y -> x <> "\n" <> y) "" (map getContent contentData)
+    contents = map trimWhitespace $ content:map (stripPrefixForce "-") (takeWhile (hasPrefix "-") xs)
+    rest = drop ((length contents) - 1) xs
+parseTag ((stripPrefix "```" -> Just lang):xs) = Code lang content : parseTag rest
+  where
+    contentData = map trimWhitespace $ takeWhile (not . hasPrefix "```") xs
     rest = drop ((length contentData) + 1) xs
+    content = foldr (\x y -> x <> "\n" <> y) "" contentData
+parseTag (x:xs) = Paragraph x : parseTag xs
 
-    isMdCode :: MarkdownStructure -> Bool
-    isMdCode MdCode = True
-    isMdCode _ = False
 
-    getContent :: MarkdownStructure -> String
-    getContent (MdString x) = x
-    getContent _ = ""
-
-convertTag (MdString content:xs) = HtmlParagraph content : convertTag xs
-
-toHtml :: [HtmlStructure] -> String
+toHtml :: [Structure] -> String
 toHtml x = wrapHtml $ htmlHead <> htmlBody
   where
     htmlHead = wrapHead $ wrapAttrTag "script" [("src", "/tailwind.js")] ""
-    htmlBody = wrapBody $ foldr (<>) "" (map matchTag x)
+    htmlBody = wrapBody $ foldr ((<>) . matchTag) "" x
 
-matchTag :: HtmlStructure -> String
-matchTag (HtmlHeader i content) = wrapTag ("h" <> [intToChar i]) content
-matchTag (HtmlUl content) = wrapTag "ul" (foldr (<>) "" (map (wrapTag "li") content))
-matchTag (HtmlOl content) = wrapTag "ol" (foldr (<>) "" (map (wrapTag "li") content))
-matchTag (HtmlCode content) = wrapTag "pre" $ wrapTag "code" content
-matchTag (HtmlParagraph content) = if content /= "" then wrapTag "p" content else ""
+matchTag :: Structure -> String
+matchTag (Header i content) = wrapTag ("h" <> [intToChar i]) content
+matchTag (Ul content) = wrapTag "ul" (foldr ((<>) . wrapTag "li") "" content)
+matchTag (Ol content) = wrapTag "ol" (foldr ((<>) . wrapTag "li") "" content)
+matchTag (Code _ content) = wrapTag "pre" $ wrapTag "code" content
+matchTag (Paragraph content) = if content /= "" then wrapTag "p" content else ""
 
 wrapAttrTag :: HtmlTag -> [(String, String)] -> String  -> String
 wrapAttrTag tag attr content  = "<" <> tag <> attrString <> ">" <> content <> "</" <> tag <> ">"
   where
-    attrString = foldr (\x y -> " " <> x <> y) "" (map (\(x,y) -> x <> "=" <> "\"" <> y <> "\"") attr)
+    attrString = foldr ((\x y -> " " <> x <> y) . (\(x,y) -> x <> "=" <> "\"" <> y <> "\"")) "" attr
 
 
 wrapTag :: HtmlTag -> String -> String
-wrapTag tag content = wrapAttrTag tag [] content
+wrapTag tag = wrapAttrTag tag []
 
 wrapHtml :: String -> String
-wrapHtml content = "<!DOCTYPE html>" <> (wrapTag "html" content)
+wrapHtml content = "<!DOCTYPE html>" <> wrapTag "html" content
 
 wrapBody :: String -> String
-wrapBody content = wrapAttrTag "body" [("class", "prose mx-auto p-4")] content
+wrapBody = wrapAttrTag "body" [("class", "prose mx-auto p-4")]
 
 wrapHead :: String -> String
-wrapHead content = wrapTag "head" content
+wrapHead = wrapTag "head"
