@@ -11,7 +11,7 @@ main :: IO ()
 main = do
   contents <- readFile "./README.md"
   putStrLn $ convert contents
-  createDirectory "./build"
+  createDirectoryIfMissing False "./build"
   writeFile "./build/index.html" $ convert contents
 
 isPrefix :: String -> String -> Bool
