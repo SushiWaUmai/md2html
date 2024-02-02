@@ -27,6 +27,16 @@ stripPrefix [] x = Just x
 stripPrefix _ [] = Nothing
 stripPrefix (x:xs) (y:ys) = if x == y then stripPrefix xs ys else Nothing
 
+trimWhitespace :: String -> String
+trimWhitespace = trimPostfix . trimPrefix
+  where
+    trimPrefix :: String -> String
+    trimPrefix x = x
+    trimPrefix (' ':xs) = xs
+
+    trimPostfix :: String -> String
+    trimPostfix x = reverse $ trimPrefix $ reverse x
+
 intToChar :: Int -> Char
 intToChar x
   | x < 10 = toEnum (x + fromEnum '0')
@@ -36,7 +46,7 @@ convert :: String -> String
 convert = toHtml . convertTag . parseMd
 
 parseMd :: String -> [MarkdownStructure]
-parseMd mdString = foldr (<>) [] (map parseTag (lines mdString))
+parseMd mdString = foldr (<>) [] (map (parseTag . trimWhitespace) (lines mdString))
 
 parseTag :: String -> [MarkdownStructure]
 parseTag (stripPrefix "# " -> Just content) =    [MdHeader 1, MdString content]
