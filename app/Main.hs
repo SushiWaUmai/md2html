@@ -38,7 +38,7 @@ parseTag (stripPrefix "# " -> Just content) =    [MdHeader 1, MdString content]
 parseTag (stripPrefix "## " -> Just content) =   [MdHeader 2, MdString content]
 parseTag (stripPrefix "### " -> Just content) =  [MdHeader 3, MdString content]
 parseTag (stripPrefix "#### " -> Just content) = [MdHeader 4, MdString content]
-parseTag (stripPrefix " - " -> Just content) = [MdUl, MdString content]
+parseTag (stripPrefix "- " -> Just content) = [MdUl, MdString content]
 parseTag (stripPrefix "```" -> Just _) = [MdCode]
 parseTag content = [MdString content]
 
@@ -73,9 +73,8 @@ matchTag (HtmlHeader i content) = wrapTag ("h" <> [intToChar i]) content
 matchTag (HtmlUl content) = wrapTag "ul" (foldr (<>) "" (map (wrapTag "li") content))
 matchTag (HtmlOl content) = wrapTag "ol" (foldr (<>) "" (map (wrapTag "li") content))
 matchTag (HtmlCode content) = wrapTag "pre" $ wrapTag "code" content
-matchTag (HtmlParagraph content) = wrapTag "p" content
+matchTag (HtmlParagraph content) = if content /= "" then wrapTag "p" content else ""
 
--- TODO update html attr
 wrapAttrTag :: HtmlTag -> [(String, String)] -> String  -> String
 wrapAttrTag tag attr content  = "<" <> tag <> attrString <> ">" <> content <> "</" <> tag <> ">"
   where
