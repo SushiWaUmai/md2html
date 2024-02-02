@@ -1,12 +1,13 @@
-{-# LANGUAGE ViewPatterns #-}
 module Main where
 import System.Directory (createDirectoryIfMissing)
 import Network.HTTP.Conduit (simpleHttp)
 import qualified Data.ByteString.Lazy as L
+import Data.List (dropWhileEnd, isPrefixOf)
+import Data.Char (intToDigit, isSpace)
 
 type HtmlTag = String
 
-data Structure = Header !Int !String | Code !String !String | Ul ![String] | Ol ![String] | Paragraph !String
+data Structure = Header !Int !String | Code !String !String | Ul ![String] | Ol ![String] | Paragraph !String deriving Show
 
 main :: IO ()
 main = do
@@ -16,35 +17,8 @@ main = do
   simpleHttp "https://cdn.tailwindcss.com?plugins=typography" >>= L.writeFile "./build/tailwind.js"
   writeFile "./build/index.html" $ convert contents
 
-hasPrefix :: String -> String -> Bool
-hasPrefix [] _ = True
-hasPrefix _ [] = False
-hasPrefix (x:xs) (y:ys) = (x == y) && hasPrefix xs ys
-
-stripPrefix :: String -> String -> Maybe String
-stripPrefix [] x = Just x
-stripPrefix _ [] = Nothing
-stripPrefix (x:xs) (y:ys) = if x == y then stripPrefix xs ys else Nothing
-
-stripPrefixForce :: String -> String -> String
-stripPrefixForce [] x = x
-stripPrefixForce _ [] = []
-stripPrefixForce (x:xs) (y:ys) = if x == y then stripPrefixForce xs ys else ys
-
 trimWhitespace :: String -> String
-trimWhitespace = trimPostfix . trimPrefix
-  where
-    trimPrefix :: String -> String
-    trimPrefix (' ':xs) = trimPrefix xs
-    trimPrefix x = x
-
-    trimPostfix :: String -> String
-    trimPostfix x = reverse $ trimPrefix $ reverse x
-
-intToChar :: Int -> Char
-intToChar x
-  | x < 10 = toEnum (x + fromEnum '0')
-  | otherwise = '0'
+trimWhitespace = dropWhile isSpace . dropWhileEnd isSpace
 
 convert :: String -> String
 convert = toHtml . parseMd
@@ -54,22 +28,17 @@ parseMd mdString = parseTag (map trimWhitespace (lines mdString))
 
 parseTag :: [String] -> [Structure]
 parseTag [] = []
-parseTag ((stripPrefix "######" -> Just content):xs) = Header 6 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "#####" -> Just content):xs) = Header 5 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "####" -> Just content):xs) = Header 4 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "###" -> Just content):xs) = Header 3 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "##" -> Just content):xs) = Header 2 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "#" -> Just content):xs) = Header 1 (trimWhitespace content) : parseTag xs
-parseTag ((stripPrefix "-" -> Just content):xs) = Ul contents : parseTag rest
-  where
-    contents = map trimWhitespace $ content:map (stripPrefixForce "-") (takeWhile (hasPrefix "-") xs)
-    rest = drop ((length contents) - 1) xs
-parseTag ((stripPrefix "```" -> Just lang):xs) = Code lang content : parseTag rest
-  where
-    contentData = map trimWhitespace $ takeWhile (not . hasPrefix "```") xs
-    rest = drop ((length contentData) + 1) xs
-    content = foldr (\x y -> x <> "\n" <> y) "" contentData
-parseTag (x:xs) = Paragraph x : parseTag xs
+parseTag (x:xs)
+  | "#" `isPrefixOf` x = let (level, content) = span (=='#') x
+                             i = length level
+                      in Header i (trimWhitespace content) : parseTag xs
+  | "-" `isPrefixOf` x = let (items, rest) = span (isPrefixOf "-") (x:xs)
+                             contents = map (trimWhitespace . drop 1) items
+                      in Ul contents : parseTag rest
+  | "```" `isPrefixOf` x = let (items, rest) = break (isPrefixOf "```") xs
+                               content = unlines $ map trimWhitespace items
+                          in Code (trimWhitespace $ drop 3 x) content : parseTag (drop 1 rest)
+  | otherwise = Paragraph x : parseTag xs
 
 
 toHtml :: [Structure] -> String
@@ -79,7 +48,7 @@ toHtml x = wrapHtml $ htmlHead <> htmlBody
     htmlBody = wrapBody $ foldr ((<>) . matchTag) "" x
 
 matchTag :: Structure -> String
-matchTag (Header i content) = wrapTag ("h" <> [intToChar i]) content
+matchTag (Header i content) = wrapTag ("h" <> [intToDigit i]) content
 matchTag (Ul content) = wrapTag "ul" (foldr ((<>) . wrapTag "li") "" content)
 matchTag (Ol content) = wrapTag "ol" (foldr ((<>) . wrapTag "li") "" content)
 matchTag (Code _ content) = wrapTag "pre" $ wrapTag "code" content
