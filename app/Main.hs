@@ -3,7 +3,7 @@ import System.Directory (createDirectoryIfMissing)
 import Network.HTTP.Conduit (simpleHttp)
 import qualified Data.ByteString.Lazy as L
 import Data.List (dropWhileEnd, isPrefixOf)
-import Data.Char (intToDigit, isSpace)
+import Data.Char (isSpace)
 
 type HtmlTag = String
 
@@ -48,7 +48,7 @@ toHtml x = wrapHtml $ htmlHead <> htmlBody
     htmlBody = wrapBody $ foldr ((<>) . matchTag) "" x
 
 matchTag :: Structure -> String
-matchTag (Header i content) = wrapTag ("h" <> [intToDigit i]) content
+matchTag (Header i content) = wrapTag ("h" <> show i) content
 matchTag (Ul content) = wrapTag "ul" (foldr ((<>) . wrapTag "li") "" content)
 matchTag (Ol content) = wrapTag "ol" (foldr ((<>) . wrapTag "li") "" content)
 matchTag (Code _ content) = wrapTag "pre" $ wrapTag "code" content
