@@ -1,5 +1,6 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main where
+import System.Directory
 
 type HtmlTag = String
 
@@ -10,7 +11,8 @@ main :: IO ()
 main = do
   contents <- readFile "./README.md"
   putStrLn $ convert contents
-  writeFile "index.html" $ convert contents
+  createDirectory "./build"
+  writeFile "./build/index.html" $ convert contents
 
 isPrefix :: String -> String -> Bool
 isPrefix [] _ = True

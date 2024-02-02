@@ -67,7 +67,8 @@ executable md2html
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1
+    build-depends:    base ^>=4.17.2.1,
+                      directory >= 1.3.7.1
 
     -- Directories containing source files.
     hs-source-dirs:   app
