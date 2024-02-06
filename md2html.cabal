@@ -68,10 +68,7 @@ executable md2html
 
     -- Other library packages from which modules are imported.
     build-depends:    base ^>=4.17.2.1,
-                      directory,
-	 	      http-conduit,
-		      bytestring,
-		      optparse-applicative 
+                      directory, bytestring, optparse-applicative
 
 
     -- Directories containing source files.

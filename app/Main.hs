@@ -1,7 +1,5 @@
 module Main where
 import System.Directory (createDirectoryIfMissing)
-import Network.HTTP.Conduit (simpleHttp)
-import qualified Data.ByteString.Lazy as L
 import Data.List (dropWhileEnd, isPrefixOf)
 import Data.Char (isSpace)
 
@@ -14,7 +12,6 @@ main = do
   contents <- readFile "./README.md"
   putStrLn $ convert contents
   createDirectoryIfMissing False "./build"
-  simpleHttp "https://cdn.tailwindcss.com?plugins=typography" >>= L.writeFile "./build/tailwind.js"
   writeFile "./build/index.html" $ convert contents
 
 trimWhitespace :: String -> String
@@ -44,7 +41,7 @@ parseTag (x:xs)
 toHtml :: [Structure] -> String
 toHtml x = wrapHtml $ htmlHead <> htmlBody
   where
-    htmlHead = wrapHead $ wrapAttrTag "script" [("src", "/tailwind.js")] ""
+    htmlHead = wrapHead $ wrapAttrTag "script" [("src", "https://cdn.tailwindcss.com?plugins=typography")] ""
     htmlBody = wrapBody $ foldr ((<>) . matchTag) "" x
 
 matchTag :: Structure -> String
