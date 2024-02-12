@@ -1,7 +1,7 @@
 module Main where
 import System.Directory (createDirectoryIfMissing)
 import Data.List (dropWhileEnd, isPrefixOf)
-import Data.Char (isSpace, isNumber)
+import Data.Char (isSpace, isDigit)
 
 type HtmlTag = String
 
@@ -23,6 +23,11 @@ convert = toHtml . parseMd
 parseMd :: String -> [Structure]
 parseMd mdString = parseTag (map trimWhitespace (lines mdString))
 
+startsWithDigitDot :: String -> Bool
+startsWithDigitDot s = case span isDigit s of
+  ([], _) -> False
+  (_, rest) -> "." `isPrefixOf` rest
+
 parseTag :: [String] -> [Structure]
 parseTag [] = []
 parseTag (x:xs)
@@ -35,9 +40,9 @@ parseTag (x:xs)
   | "```" `isPrefixOf` x = let (items, rest) = break (isPrefixOf "```") xs
                                content = unlines $ map trimWhitespace items
                           in Code (trimWhitespace $ drop 3 x) content : parseTag (drop 1 rest)
-  -- | "1." `isPrefixOf` x = let (items, rest) = span (let (c:'.':_) = x in isNumber c) (x:xs)
-  --                             contents = map (trimWhitespace . drop 2) items
-  --                         in Ol contents : parseTag rest
+  | startsWithDigitDot x = let (items, rest) = span startsWithDigitDot (x:xs)
+                               contents = map (trimWhitespace . drop 2) items
+                      in Ol contents : parseTag rest
   | otherwise = Paragraph x : parseTag xs
 
 
